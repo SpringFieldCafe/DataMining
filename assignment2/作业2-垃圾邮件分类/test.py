@@ -1,16 +1,28 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.metrics import accuracy_score
 
 # 1 读取数据
-data = pd.read_csv('D:/spam.csv')
+data = pd.read_csv('spam.csv')
 data['Spam'] = data['Category'].apply(lambda x: 1 if x == 'spam' else 0)
 
 # 2 数据预处理
 X_train, X_test, y_train, y_test = train_test_split(data.Message, data.Spam, test_size=0.25)
 
 # 3 模型训练，基于X_train和y_train进行训练，包括原始数据转化为词频向量，基于词频向量训练贝叶斯模型
+vectorizer = CountVectorizer()
+X_train_vectorized = vectorizer.fit_transform(X_train)
+
+model = MultinomialNB()
+model.fit(X_train_vectorized, y_train)
 
 # 4 模型评估，基于X_test和y_test进行准确率评估
+X_test_vectorized = vectorizer.transform(X_test)
+y_pred = model.predict(X_test_vectorized)
+accuracy = accuracy_score(y_test, y_pred)
+print(f"模型准确率: {accuracy:.4f}")
 
 # 5 结果验证，基于训练模型评估新测试集结果
 test_mails = [
@@ -34,3 +46,16 @@ test_mails = [
     'your mobile will be charged £5/month Please confirm by replying YES or NO. '
     'If you reply NO you will not be charged'
 ]
+
+# 预测测试邮件
+test_mails_vectorized = vectorizer.transform(test_mails)
+predictions = model.predict(test_mails_vectorized)
+
+# 输出预测结果
+print("\n测试邮件预测结果:")
+for i, (mail, pred) in enumerate(zip(test_mails, predictions)):
+    status = "垃圾邮件" if pred == 1 else "正常邮件"
+    print(f"邮件 {i+1}: {status}")
+    print(f"内容: {mail[:100]}..." if len(mail) > 100 else f"内容: {mail}")
+    print()
+
