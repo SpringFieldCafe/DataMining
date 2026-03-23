@@ -1,11 +1,13 @@
 import pandas as pd
+import os
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics import accuracy_score
 
 # 1 读取数据
-data = pd.read_csv('spam.csv')
+file_path = os.path.join(os.path.dirname(__file__), 'spam.csv')
+data = pd.read_csv(file_path)
 data['Spam'] = data['Category'].apply(lambda x: 1 if x == 'spam' else 0)
 
 # 2 数据预处理
