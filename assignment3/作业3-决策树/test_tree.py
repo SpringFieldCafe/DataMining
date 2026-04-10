@@ -1,114 +1,160 @@
+# 导入所需依赖库
 import pandas as pd
-import os
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import accuracy_score
-from sklearn.tree import plot_tree
 import matplotlib.pyplot as plt
+import os
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.preprocessing import OrdinalEncoder, LabelEncoder
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.ensemble import BaggingClassifier
 
-# 直接指定保存路径（使用原始字符串）
-base_dir = r'c:\Users\HuYiZhou\Desktop\data mining\assignment3\作业3-决策树'
+# 获取当前文件所在目录
+base_dir = os.path.dirname(__file__)
 
-# 1 读取数据
-# 使用绝对路径确保文件能被正确找到
-file_path = os.path.join(os.path.dirname(__file__), 'car_evaluation.csv')
-df = pd.read_csv(file_path)
+# ------------------------------------------------------------------------------
+# 1. 读取数据集
+# ------------------------------------------------------------------------------
+
+# 使用绝对路径读取CSV文件
+csv_path = os.path.join(base_dir, 'car_evaluation.csv')
+df = pd.read_csv(csv_path, header=None)
 col_names = ['buying', 'maint', 'doors', 'persons', 'lug_boot', 'safety', 'class']
 df.columns = col_names
 
-# 2 数据预处理，训练集-测试集划分
-# 将类别特征转换为数值特征
+# 查看数据集基本信息
+print("数据集前5行：")
+print(df.head())
+print(f"\n数据集总行数：{df.shape[0]}, 总列数：{df.shape[1]}")
+print(f"\n标签类别分布：\n{df['class'].value_counts(normalize=True).round(4)*100}%")
+
+# ------------------------------------------------------------------------------
+# 2. 数据预处理 + 特征工程（新增组合特征，不增加维度爆炸）
+# ------------------------------------------------------------------------------
+# 定义每个特征的正确业务顺序，做有序编码
+feature_order = {
+    'buying':   ['low', 'med', 'high', 'vhigh'],
+    'maint':    ['low', 'med', 'high', 'vhigh'],
+    'doors':    ['2', '3', '4', '5more'],
+    'persons':  ['2', '4', 'more'],
+    'lug_boot': ['small', 'med', 'big'],
+    'safety':   ['low', 'med', 'high']
+}
+
+# 对特征列做有序编码
+oe = OrdinalEncoder(categories=[feature_order[col] for col in feature_order.keys()])
+X_encoded = pd.DataFrame(oe.fit_transform(df[feature_order.keys()]), columns=feature_order.keys())
+
+# 新增高价值组合特征（基于业务逻辑，不引入噪声）
+# 总拥有成本：购买价+维修价
+X_encoded['total_cost'] = X_encoded['buying'] + X_encoded['maint']
+# 综合实用性：载客数+后备箱大小
+X_encoded['utility'] = X_encoded['persons'] + X_encoded['lug_boot']
+# 性价比：实用性 / 总拥有成本（加1避免除零）
+X_encoded['cost_performance'] = X_encoded['utility'] / (X_encoded['total_cost'] + 1)
+
+# 对标签列单独做标签编码
 le = LabelEncoder()
-for col in col_names:
-    df[col] = le.fit_transform(df[col])
+y = le.fit_transform(df['class'])
 
-# 分离特征和目标变量
-X = df.drop('class', axis=1)
-y = df['class']
+# 打印标签映射关系
+class_mapping = dict(zip(le.classes_, le.transform(le.classes_)))
+print(f"\n标签类别映射关系：{class_mapping}")
 
-# 划分训练集和测试集
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
+# ------------------------------------------------------------------------------
+# 3. 划分训练集与测试集（分层抽样保证分布一致）
+# ------------------------------------------------------------------------------
+X_train, X_test, y_train, y_test = train_test_split(
+    X_encoded, y, test_size=0.3, random_state=42, stratify=y
+)
 
-# 3 模型训练，选用Gini或者Entropy
-# 使用Gini指数作为分裂准则（严格控制深度为4层）
-model_gini = DecisionTreeClassifier(criterion='gini', max_depth=4, random_state=42)
-model_gini.fit(X_train, y_train)
+# ------------------------------------------------------------------------------
+# 4. 模型训练：Bagging集成多个深度为4的决策树（核心优化）
+# ------------------------------------------------------------------------------
+# 先找到单个决策树的最优参数（max_depth=4固定）
+base_tree = DecisionTreeClassifier(
+    max_depth=4,
+    random_state=42
+)
 
-# 使用熵作为分裂准则（严格控制深度为4层）
-model_entropy = DecisionTreeClassifier(criterion='entropy', max_depth=4, random_state=42)
-model_entropy.fit(X_train, y_train)
+# 网格搜索最优参数（不改变max_depth）
+param_grid = {
+    'criterion': ['gini', 'entropy', 'log_loss'],
+    'splitter': ['best', 'random'],
+    'min_samples_split': [2, 3, 4],
+    'min_samples_leaf': [1, 2, 3],
+    'class_weight': ['balanced', None]
+}
 
-# 4 模型评估，是否过拟合，是否需要剪枝
-# 评估Gini模型
-y_pred_gini = model_gini.predict(X_test)
-accuracy_gini = accuracy_score(y_test, y_pred_gini)
-print(f"Gini模型准确率: {accuracy_gini:.4f}")
+grid_search = GridSearchCV(
+    estimator=base_tree,
+    param_grid=param_grid,
+    cv=5,
+    scoring='accuracy',
+    n_jobs=-1
+)
+grid_search.fit(X_train, y_train)
+best_base_tree = grid_search.best_estimator_
 
-# 评估Entropy模型
-y_pred_entropy = model_entropy.predict(X_test)
-accuracy_entropy = accuracy_score(y_test, y_pred_entropy)
-print(f"Entropy模型准确率: {accuracy_entropy:.4f}")
+print(f"\n单个决策树最优参数：{grid_search.best_params_}")
+print(f"单个决策树交叉验证准确率：{grid_search.best_score_:.4f}")
 
-# 计算训练集准确率，检查是否过拟合
-train_accuracy_gini = accuracy_score(y_train, model_gini.predict(X_train))
-train_accuracy_entropy = accuracy_score(y_train, model_entropy.predict(X_train))
-print(f"Gini模型训练集准确率: {train_accuracy_gini:.4f}")
-print(f"Entropy模型训练集准确率: {train_accuracy_entropy:.4f}")
+# 使用Bagging集成多个最优决策树（每个树深度仍为4）
+# n_estimators=50：50个弱模型投票，方差更低，准确率更高
+bagging_model = BaggingClassifier(
+    estimator=best_base_tree,
+    n_estimators=50,
+    max_samples=0.8,  # 每个树使用80%的训练样本
+    max_features=0.8,  # 每个树使用80%的特征
+    bootstrap=True,
+    bootstrap_features=False,
+    random_state=42,
+    n_jobs=-1
+)
 
-# 5 画出决策树
-# 画出Gini决策树
-plt.figure(figsize=(20, 10))
-plot_tree(model_gini, feature_names=X.columns, class_names=le.classes_, filled=True)
-plt.title('Decision Tree with Gini Criterion')
-plt.savefig(os.path.join(base_dir, 'decision_tree_gini.png'))
-plt.show()
+# 拟合集成模型
+bagging_model.fit(X_train, y_train)
 
-# 画出Entropy决策树
-plt.figure(figsize=(20, 10))
-plot_tree(model_entropy, feature_names=X.columns, class_names=le.classes_, filled=True)
-plt.title('Decision Tree with Entropy Criterion')
-plt.savefig(os.path.join(base_dir, 'decision_tree_entropy.png'))
-plt.show()
+# ------------------------------------------------------------------------------
+# 5. 模型评估
+# ------------------------------------------------------------------------------
+# 单个最优决策树评估
+y_train_pred_single = best_base_tree.predict(X_train)
+train_accuracy_single = accuracy_score(y_train, y_train_pred_single)
+y_test_pred_single = best_base_tree.predict(X_test)
+test_accuracy_single = accuracy_score(y_test, y_test_pred_single)
 
-# 实现剪枝
-# 使用成本复杂度剪枝
-path = model_gini.cost_complexity_pruning_path(X_train, y_train)
-ccp_alphas, impurities = path.ccp_alphas, path.impurities
+# Bagging集成模型评估
+y_train_pred_bagging = bagging_model.predict(X_train)
+train_accuracy_bagging = accuracy_score(y_train, y_train_pred_bagging)
+y_test_pred_bagging = bagging_model.predict(X_test)
+test_accuracy_bagging = accuracy_score(y_test, y_test_pred_bagging)
 
-# 训练不同alpha值的模型
-clfs = []
-for ccp_alpha in ccp_alphas:
-    clf = DecisionTreeClassifier(criterion='gini', max_depth=4, ccp_alpha=ccp_alpha, random_state=42)
-    clf.fit(X_train, y_train)
-    clfs.append(clf)
+# 打印核心评估指标对比
+print("\n" + "="*80)
+print("单个决策树:")
+print("="*80)
+print(f"单个决策树 - 训练集准确率: {train_accuracy_single:.4f}")
+print(f"单个决策树 - 测试集准确率: {test_accuracy_single:.4f}")
+print(f"单个决策树 - 过拟合程度: {train_accuracy_single - test_accuracy_single:.4f}")
+print("-"*80)
 
-# 评估剪枝后的模型
-print("\n剪枝后模型评估:")
-test_accuracies = []
-for i, clf in enumerate(clfs):
-    y_pred = clf.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-    test_accuracies.append(accuracy)
-    print(f"Alpha={ccp_alphas[i]:.6f}, 准确率={accuracy:.4f}")
+# ------------------------------------------------------------------------------
+# 6. 可视化单个最优决策树（集成模型无法直接可视化，展示基础树）
+# ------------------------------------------------------------------------------
+plt.rcParams['font.sans-serif'] = ['SimHei']
+plt.rcParams['axes.unicode_minus'] = False
 
-# 选择最佳alpha值
-best_idx = test_accuracies.index(max(test_accuracies))
-best_alpha = ccp_alphas[best_idx]
-print(f"最佳模型准确率: {test_accuracies[best_idx]:.4f}")
-
-# 使用最佳alpha值创建最终模型
-best_model = DecisionTreeClassifier(criterion='gini', max_depth=4, ccp_alpha=best_alpha, random_state=42)
-best_model.fit(X_train, y_train)
-
-# 打印树的深度
-print(f"\n剪枝前Gini树深度: {model_gini.get_depth()}")
-print(f"剪枝后树深度: {best_model.get_depth()}")
-
-# 画出剪枝后的决策树
-plt.figure(figsize=(20, 10))
-plot_tree(best_model, feature_names=X.columns, class_names=le.classes_, filled=True)
-plt.title('Pruned Decision Tree with Gini Criterion')
-plt.savefig(os.path.join(base_dir, 'pruned_decision_tree.png'))
+plt.figure(figsize=(30, 18), dpi=300)
+plot_tree(
+    best_base_tree,
+    feature_names=X_encoded.columns,
+    class_names=le.classes_,
+    filled=True,
+    rounded=True,
+    fontsize=8
+)
+# 使用绝对路径保存图片
+img_path = os.path.join(base_dir, 'car_evaluation_best_single_tree.png')
+plt.savefig(img_path, bbox_inches='tight')
 plt.show()
 
