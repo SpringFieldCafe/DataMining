@@ -36,7 +36,7 @@ def elbow_method(X, title, save_name):
     plt.ylabel('Inertia')
     plt.grid(True)
     plt.savefig(save_name)
-    plt.show()
+    plt.show(block=False)
 
     return inertia
 
@@ -74,7 +74,7 @@ def plot_2d_clusters(X, y_kmeans, kmeans, optimal_k, colors, title, xlabel, ylab
     plt.legend()
     plt.grid(True)
     plt.savefig(save_name)
-    plt.show()
+    plt.show(block=False)
 
 
 # =========================================================
@@ -90,7 +90,7 @@ inertia1 = elbow_method(
     'elbow_age_spending.png'
 )
 
-# 根据肘部图选择 K
+
 optimal_k1 = 4
 
 # 2、K-Means++ 优化起始中心点
@@ -226,4 +226,4 @@ ax.set_ylabel('Annual Income (k$)')
 ax.set_zlabel('Spending Score (1-100)')
 ax.legend()
 plt.savefig('cluster_age_income_spending.png')
-plt.show()
+plt.show(block=True)
