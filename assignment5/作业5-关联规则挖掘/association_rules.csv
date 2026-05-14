@@ -1,0 +1,8 @@
+﻿rule,antecedent,consequent,support,confidence,lift
+soups -> seasonal products,soups,seasonal products,0.0003341575887188398,0.10416666666666667,14.704205974842768
+roll products -> meat,roll products,meat,0.0003341575887188398,0.06097560975609757,3.620547812620984
+salt -> misc. beverages,salt,misc. beverages,0.0003341575887188398,0.05617977528089888,3.5619405827461437
+liver loaf -> fruit/vegetable juice,liver loaf,fruit/vegetable juice,0.00040098910646260775,0.12,3.5276227897838903
+pickled vegetables -> ham,pickled vegetables,ham,0.0005346521419501437,0.05970149253731344,3.4895055970149254
+spread cheese -> sugar,spread cheese,sugar,0.00040098910646260775,0.06,3.3878490566037733
+spread cheese -> misc. beverages,spread cheese,misc. beverages,0.0003341575887188398,0.05,3.170127118644068
