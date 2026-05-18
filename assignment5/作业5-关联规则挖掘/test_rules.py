@@ -1,12 +1,10 @@
 import os
 import sys
 
-import matplotlib
 import pandas as pd
 from mlxtend.frequent_patterns import apriori, association_rules
 from mlxtend.preprocessing import TransactionEncoder
 
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
@@ -36,31 +34,36 @@ def itemset_to_text(itemset):
 
 
 def build_transactions(data):
-    # 同一会员同一天购买的商品视为一条购物篮记录
+    # 【数据预处理】同一会员同一天购买的商品视为一条购物篮记录
+    # 【联合主键】使用 Member_number + Date 分组，形成每个用户每天的交易篮
     baskets = (
         data.groupby(["Member_number", "Date"])["itemDescription"]
         .apply(list)
         .reset_index(name="items")
     )
 
+    # 【One-Hot 编码】将购物篮转换为 Apriori 算法需要的布尔矩阵
     encoder = TransactionEncoder()
     encoded = encoder.fit_transform(baskets["items"])
     return pd.DataFrame(encoded, columns=encoder.columns_)
 
 
 def mine_rules(transaction_df):
+    # 【频繁项集归纳】根据最小支持度 min_support=0.00030 挖掘频繁项集
     frequent_itemsets = apriori(
         transaction_df,
         min_support=MIN_SUPPORT,
         use_colnames=True,
     )
+
+    # 【关联规则生成】基于频繁项集生成满足最小置信度 min_confidence=0.05 的规则
     rules = association_rules(
         frequent_itemsets,
         metric="confidence",
         min_threshold=MIN_CONFIDENCE,
     )
 
-    # 只保留“单一前项 -> 单一后项”，并筛选 lift
+    # 【规则筛选】只保留“单一前项 -> 单一后项”，并筛选 lift >= 3
     rules = rules[
         (rules["antecedents"].apply(len) == 1)
         & (rules["consequents"].apply(len) == 1)
@@ -92,6 +95,7 @@ def save_plots(rules):
 
     top_rules = rules.head(10).sort_values("lift")
 
+    # 【可视化 1】展示 Lift 值最高的规则，便于观察强关联规则
     plt.figure(figsize=(10, 6))
     plt.barh(top_rules["rule"], top_rules["lift"], color="#4C78A8")
     plt.xlabel("Lift")
@@ -99,8 +103,8 @@ def save_plots(rules):
     plt.title("Top Association Rules by Lift")
     plt.tight_layout()
     plt.savefig(LIFT_PLOT_PATH, dpi=200)
-    plt.close()
 
+    # 【可视化 2】展示支持度、置信度与 Lift 的关系
     plt.figure(figsize=(8, 6))
     scatter = plt.scatter(
         rules["support"],
@@ -116,7 +120,10 @@ def save_plots(rules):
     plt.title("Support, Confidence and Lift of Rules")
     plt.tight_layout()
     plt.savefig(SCATTER_PLOT_PATH, dpi=200)
-    plt.close()
+
+    # 【图片展示】运行脚本时展示上面两张图片；关闭窗口后程序继续结束
+    plt.show()
+    plt.close("all")
 
 
 def print_rules(rules):
@@ -132,6 +139,7 @@ def print_rules(rules):
         return
 
     write_line("所有规则如下：")
+    # 【结果展示】逐条列出全部单项关联规则，并展示 support、confidence、lift
     for index, row in rules.iterrows():
         write_line(f"规则 {index + 1}: {row['rule']}")
         write_line(f"  support: {row['support']:.6f}")
