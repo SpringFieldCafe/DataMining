@@ -1,0 +1,36 @@
+﻿模型准确率: 0.7300
+
+分类报告:
+              precision    recall  f1-score   support
+
+           0       0.81      0.91      0.85       132
+           1       0.74      0.61      0.67       118
+           2       0.64      0.48      0.55       120
+           3       0.71      0.88      0.78       130
+
+    accuracy                           0.73       500
+   macro avg       0.72      0.72      0.71       500
+weighted avg       0.72      0.73      0.72       500
+
+特征重要性排序:
+      Feature  Importance
+          ram     0.98822
+battery_power     0.01178
+         blue     0.00000
+ touch_screen     0.00000
+      three_g     0.00000
+    talk_time     0.00000
+         sc_w     0.00000
+         sc_h     0.00000
+     px_width     0.00000
+    px_height     0.00000
+           pc     0.00000
+      n_cores     0.00000
+    mobile_wt     0.00000
+        m_dep     0.00000
+   int_memory     0.00000
+       four_g     0.00000
+           fc     0.00000
+     dual_sim     0.00000
+  clock_speed     0.00000
+         wifi     0.00000

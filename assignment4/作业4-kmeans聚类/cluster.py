@@ -5,7 +5,8 @@ from sklearn.cluster import KMeans
 import os
 
 # 读取数据
-file_path = os.path.join(os.path.dirname(__file__), 'Mall_Customers.csv')
+base_dir = os.path.dirname(__file__)
+file_path = os.path.join(base_dir, 'Mall_Customers.csv')
 df = pd.read_csv(file_path)
 
 
@@ -35,7 +36,7 @@ def elbow_method(X, title, save_name):
     plt.xlabel('Number of clusters (K)')
     plt.ylabel('Inertia')
     plt.grid(True)
-    plt.savefig(save_name)
+    plt.savefig(os.path.join(base_dir, save_name))
     plt.show(block=False)
 
     return inertia
@@ -73,7 +74,7 @@ def plot_2d_clusters(X, y_kmeans, kmeans, optimal_k, colors, title, xlabel, ylab
     plt.ylabel(ylabel)
     plt.legend()
     plt.grid(True)
-    plt.savefig(save_name)
+    plt.savefig(os.path.join(base_dir, save_name))
     plt.show(block=False)
 
 
@@ -225,5 +226,5 @@ ax.set_xlabel('Age')
 ax.set_ylabel('Annual Income (k$)')
 ax.set_zlabel('Spending Score (1-100)')
 ax.legend()
-plt.savefig('cluster_age_income_spending.png')
+plt.savefig(os.path.join(base_dir, 'cluster_age_income_spending.png'))
 plt.show(block=True)
