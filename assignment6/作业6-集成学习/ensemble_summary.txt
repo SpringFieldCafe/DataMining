@@ -1,0 +1,13 @@
+集成学习模型对比结果:
+           model  accuracy  precision  recall  f1_score
+GradientBoosting    0.9125   0.912431  0.9125  0.912295
+         Bagging    0.8975   0.897805  0.8975  0.897620
+    RandomForest    0.8775   0.877649  0.8775  0.877400
+        AdaBoost    0.7100   0.707569  0.7100  0.707233
+
+最优模型: GradientBoosting
+最优模型 accuracy: 0.9125
+最优模型 weighted_f1: 0.9123
+原因分析: 在同一训练集和测试集划分下，最优模型能更好地综合多个弱学习器的判断，因此整体分类误差更低。
+模型对比表: ensemble_model_comparison.csv
+随机森林特征重要度: random_forest_feature_importance.csv

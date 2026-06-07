@@ -2,7 +2,12 @@ from pathlib import Path
 import sys
 
 import pandas as pd
-from sklearn.ensemble import AdaBoostClassifier
+from sklearn.ensemble import (
+    AdaBoostClassifier,
+    BaggingClassifier,
+    GradientBoostingClassifier,
+    RandomForestClassifier,
+)
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
@@ -37,6 +42,9 @@ CONFUSION_PATH = BASE_DIR / "confusion_matrix.csv"
 IMPORTANCE_PATH = BASE_DIR / "feature_importance.csv"
 PRED_PATH = BASE_DIR / "test_predictions.csv"
 SUMMARY_PATH = BASE_DIR / "summary_metrics.txt"
+MODEL_COMPARE_PATH = BASE_DIR / "ensemble_model_comparison.csv"
+RF_IMPORTANCE_PATH = BASE_DIR / "random_forest_feature_importance.csv"
+ENSEMBLE_SUMMARY_PATH = BASE_DIR / "ensemble_summary.txt"
 
 
 def out(text: str) -> None:
@@ -135,3 +143,67 @@ out("\n各类别 precision / recall / f1-score / support 已保存到 classifica
 out("重要特征排名前 10:")
 for _, row in importance_df.head(10).iterrows():
     out(f"{row['feature']}: {row['importance']:.4f}")
+
+
+# 4 集成学习扩展实验：多模型对比
+ensemble_models = {
+    "Bagging": BaggingClassifier(n_estimators=100, random_state=42, n_jobs=-1),
+    "RandomForest": RandomForestClassifier(n_estimators=200, random_state=42, n_jobs=-1),
+    "AdaBoost": model,
+    "GradientBoosting": GradientBoostingClassifier(
+        n_estimators=100,
+        learning_rate=0.1,
+        random_state=42,
+    ),
+}
+
+compare_rows = []
+for model_name, clf in ensemble_models.items():
+    if model_name != "AdaBoost":
+        clf.fit(X_train, y_train)
+
+    pred = clf.predict(X_test)
+    compare_rows.append(
+        {
+            "model": model_name,
+            "accuracy": accuracy_score(y_test, pred),
+            "precision": precision_score(y_test, pred, average="weighted", zero_division=0),
+            "recall": recall_score(y_test, pred, average="weighted", zero_division=0),
+            "f1_score": f1_score(y_test, pred, average="weighted", zero_division=0),
+        }
+    )
+
+compare_df = pd.DataFrame(compare_rows).sort_values(
+    ["accuracy", "f1_score"],
+    ascending=False,
+)
+compare_df.to_csv(MODEL_COMPARE_PATH, index=False, encoding="utf-8-sig")
+
+rf_model = ensemble_models["RandomForest"]
+rf_importance_df = pd.DataFrame(
+    {
+        "feature": X.columns,
+        "importance": rf_model.feature_importances_,
+    }
+).sort_values("importance", ascending=False)
+rf_importance_df.to_csv(RF_IMPORTANCE_PATH, index=False, encoding="utf-8-sig")
+
+best = compare_df.iloc[0]
+ensemble_summary_lines = [
+    "集成学习模型对比结果:",
+    compare_df.to_string(index=False),
+    "",
+    f"最优模型: {best['model']}",
+    f"最优模型 accuracy: {best['accuracy']:.4f}",
+    f"最优模型 weighted_f1: {best['f1_score']:.4f}",
+    "原因分析: 在同一训练集和测试集划分下，最优模型能更好地综合多个弱学习器的判断，因此整体分类误差更低。",
+    f"模型对比表: {MODEL_COMPARE_PATH.name}",
+    f"随机森林特征重要度: {RF_IMPORTANCE_PATH.name}",
+]
+ENSEMBLE_SUMMARY_PATH.write_text("\n".join(ensemble_summary_lines), encoding="utf-8")
+
+out("\n集成学习扩展对比:")
+out(compare_df.to_string(index=False))
+out(f"最优模型: {best['model']}，accuracy={best['accuracy']:.4f}，weighted_f1={best['f1_score']:.4f}")
+out(f"模型对比表已保存到: {MODEL_COMPARE_PATH.name}")
+out(f"随机森林特征重要度已保存到: {RF_IMPORTANCE_PATH.name}")
