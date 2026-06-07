@@ -1,0 +1,19 @@
+数据文件: data.csv
+目标变量: price_range
+总样本数: 2000
+特征数量: 20
+训练集样本数: 1600
+测试集样本数: 400
+AdaBoost 弱学习器数量 n_estimators: 120
+AdaBoost 学习率 learning_rate: 0.8
+准确率 accuracy: 0.7100
+宏平均精确率 macro_precision: 0.7076
+宏平均召回率 macro_recall: 0.7100
+宏平均 F1 macro_f1: 0.7072
+加权精确率 weighted_precision: 0.7076
+加权召回率 weighted_recall: 0.7100
+加权 F1 weighted_f1: 0.7072
+分类报告: classification_report.csv
+混淆矩阵: confusion_matrix.csv
+特征重要度: feature_importance.csv
+测试集预测结果: test_predictions.csv

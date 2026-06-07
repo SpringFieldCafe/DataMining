@@ -1,156 +1,137 @@
 from pathlib import Path
+import sys
 
 import pandas as pd
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.metrics import (
     accuracy_score,
-    balanced_accuracy_score,
     classification_report,
     confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
 )
 from sklearn.model_selection import train_test_split
 
 
-# 所有输入、输出文件都放在当前作业 6 文件夹下，避免从其他目录运行时路径出错
+# 所有输入、输出文件都放在当前代码所在文件夹，避免从其他目录运行时路径出错
 BASE_DIR = Path(__file__).resolve().parent
 DATA_PATH = BASE_DIR / "data.csv"
 
-REPORT_PATH = BASE_DIR / "adaboost_evaluation.txt"
-FEATURE_IMPORTANCE_PATH = BASE_DIR / "feature_importance.csv"
-CONFUSION_MATRIX_PATH = BASE_DIR / "confusion_matrix.csv"
-PREDICT_PROBA_PATH = BASE_DIR / "predict_probability_sample.csv"
+if not DATA_PATH.exists():
+    csv_files = sorted(
+        p for p in BASE_DIR.glob("*.csv")
+        if p.name not in {
+            "classification_report.csv",
+            "confusion_matrix.csv",
+            "feature_importance.csv",
+            "test_predictions.csv",
+        }
+    )
+    if not csv_files:
+        raise FileNotFoundError("没有在代码同级目录下找到数据表，请把 data.csv 和 main.py 放在同一文件夹。")
+    DATA_PATH = csv_files[0]
+
+REPORT_PATH = BASE_DIR / "classification_report.csv"
+CONFUSION_PATH = BASE_DIR / "confusion_matrix.csv"
+IMPORTANCE_PATH = BASE_DIR / "feature_importance.csv"
+PRED_PATH = BASE_DIR / "test_predictions.csv"
+SUMMARY_PATH = BASE_DIR / "summary_metrics.txt"
 
 
-# 1. 读取数据
+def out(text: str) -> None:
+    """使用 sys 模块输出关键结果。"""
+    sys.stdout.write(text + "\n")
+
+
+# 1 读取数据
 df = pd.read_csv(DATA_PATH)
+target_col = "price_range" if "price_range" in df.columns else df.columns[-1]
+X = df.drop(columns=[target_col])
+y = df[target_col]
 
-# price_range 是分类标签，其余列作为手机属性特征
-X = df.drop("price_range", axis=1)
-y = df["price_range"]
+# 缺失值做简单填充，保证模型可以正常训练
+for col in X.columns:
+    if X[col].isna().any():
+        if pd.api.types.is_numeric_dtype(X[col]):
+            X[col] = X[col].fillna(X[col].median())
+        else:
+            X[col] = X[col].fillna(X[col].mode().iloc[0])
+X = pd.get_dummies(X, drop_first=False)
 
-
-# 2. 划分训练集和测试集
+stratify_y = y if y.value_counts().min() >= 2 else None
 X_train, X_test, y_train, y_test = train_test_split(
     X,
     y,
-    test_size=0.25,
+    test_size=0.2,
     random_state=42,
-    stratify=y,
+    stratify=stratify_y,
 )
 
-
-# 3. 使用 AdaBoost 分类器训练模型
-# sklearn 1.6 以后 algorithm 参数已废弃，因此这里不再写 algorithm="SAMME"
-adaboost = AdaBoostClassifier(
-    n_estimators=100,
+# 2 使用 AdaBoost 分类器训练模型
+model = AdaBoostClassifier(
+    n_estimators=120,
+    learning_rate=0.8,
     random_state=42,
 )
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
 
-adaboost.fit(X_train, y_train)
-
-
-# 4. 模型预测
-y_pred = adaboost.predict(X_test)
-
-
-# 5. 重要评价指标
+# 3 模型在测试集的运行结果评估
 accuracy = accuracy_score(y_test, y_pred)
-balanced_accuracy = balanced_accuracy_score(y_test, y_pred)
+precision_macro = precision_score(y_test, y_pred, average="macro", zero_division=0)
+recall_macro = recall_score(y_test, y_pred, average="macro", zero_division=0)
+f1_macro = f1_score(y_test, y_pred, average="macro", zero_division=0)
+precision_weighted = precision_score(y_test, y_pred, average="weighted", zero_division=0)
+recall_weighted = recall_score(y_test, y_pred, average="weighted", zero_division=0)
+f1_weighted = f1_score(y_test, y_pred, average="weighted", zero_division=0)
 
-report = classification_report(
-    y_test,
-    y_pred,
-    digits=4,
-    zero_division=0,
+report_df = pd.DataFrame(
+    classification_report(y_test, y_pred, output_dict=True, zero_division=0)
+).T
+labels = sorted(y.unique())
+confusion_df = pd.DataFrame(
+    confusion_matrix(y_test, y_pred, labels=labels),
+    index=[f"真实_{label}" for label in labels],
+    columns=[f"预测_{label}" for label in labels],
 )
+importance_df = pd.DataFrame(
+    {"feature": X.columns, "importance": model.feature_importances_}
+).sort_values("importance", ascending=False)
+pred_df = pd.DataFrame({"true_label": y_test, "pred_label": y_pred}, index=y_test.index).sort_index()
 
-cm = confusion_matrix(y_test, y_pred)
+report_df.to_csv(REPORT_PATH, encoding="utf-8-sig")
+confusion_df.to_csv(CONFUSION_PATH, encoding="utf-8-sig")
+importance_df.to_csv(IMPORTANCE_PATH, index=False, encoding="utf-8-sig")
+pred_df.to_csv(PRED_PATH, encoding="utf-8-sig")
 
-cm_df = pd.DataFrame(
-    cm,
-    index=[f"真实类别_{c}" for c in adaboost.classes_],
-    columns=[f"预测类别_{c}" for c in adaboost.classes_],
-)
+summary_lines = [
+    f"数据文件: {DATA_PATH.name}",
+    f"目标变量: {target_col}",
+    f"总样本数: {len(df)}",
+    f"特征数量: {X.shape[1]}",
+    f"训练集样本数: {len(X_train)}",
+    f"测试集样本数: {len(X_test)}",
+    f"AdaBoost 弱学习器数量 n_estimators: {model.n_estimators}",
+    f"AdaBoost 学习率 learning_rate: {model.learning_rate}",
+    f"准确率 accuracy: {accuracy:.4f}",
+    f"宏平均精确率 macro_precision: {precision_macro:.4f}",
+    f"宏平均召回率 macro_recall: {recall_macro:.4f}",
+    f"宏平均 F1 macro_f1: {f1_macro:.4f}",
+    f"加权精确率 weighted_precision: {precision_weighted:.4f}",
+    f"加权召回率 weighted_recall: {recall_weighted:.4f}",
+    f"加权 F1 weighted_f1: {f1_weighted:.4f}",
+    f"分类报告: {REPORT_PATH.name}",
+    f"混淆矩阵: {CONFUSION_PATH.name}",
+    f"特征重要度: {IMPORTANCE_PATH.name}",
+    f"测试集预测结果: {PRED_PATH.name}",
+]
+SUMMARY_PATH.write_text("\n".join(summary_lines), encoding="utf-8")
 
+for line in summary_lines:
+    out(line)
 
-# 6. 特征重要性
-feature_importance = pd.DataFrame(
-    {
-        "Feature": X.columns,
-        "Importance": adaboost.feature_importances_,
-    }
-).sort_values("Importance", ascending=False)
-
-
-# 7. 预测概率，也就是模型对每个类别的置信度
-proba = adaboost.predict_proba(X_test)
-
-proba_df = pd.DataFrame(
-    proba,
-    columns=[f"类别_{c}_概率" for c in adaboost.classes_],
-)
-
-prediction_sample = X_test.reset_index(drop=True).copy()
-prediction_sample["真实类别"] = y_test.reset_index(drop=True)
-prediction_sample["预测类别"] = y_pred
-prediction_sample["预测是否正确"] = prediction_sample["真实类别"] == prediction_sample["预测类别"]
-
-prediction_sample = pd.concat(
-    [
-        prediction_sample,
-        proba_df,
-    ],
-    axis=1,
-)
-
-prediction_sample_head = prediction_sample.head(10)
-
-
-# 8. 组织输出文本
-output_text = (
-    "========== AdaBoost 手机价格等级分类实验结果 ==========\n\n"
-    f"数据集路径: {DATA_PATH}\n"
-    f"样本总数: {len(df)}\n"
-    f"训练集样本数: {len(X_train)}\n"
-    f"测试集样本数: {len(X_test)}\n"
-    f"特征数量: {X.shape[1]}\n"
-    f"类别数量: {len(adaboost.classes_)}\n"
-    f"类别标签: {list(adaboost.classes_)}\n\n"
-    "========== 1. 整体评价指标 ==========\n\n"
-    f"Accuracy 准确率: {accuracy:.4f}\n"
-    f"Balanced Accuracy 平衡准确率: {balanced_accuracy:.4f}\n\n"
-    "说明:\n"
-    "Accuracy 表示整体预测正确的比例。\n"
-    "Balanced Accuracy 会分别计算每个类别的召回率后再取平均，适合观察多分类任务中各类别是否均衡。\n\n"
-    "========== 2. 分类报告 ==========\n\n"
-    f"{report}\n"
-    "说明:\n"
-    "precision 表示预测为某一类的样本中有多少是真的。\n"
-    "recall 表示某一类真实样本中有多少被模型找出来，也叫召回率。\n"
-    "f1-score 是 precision 和 recall 的综合指标。\n"
-    "support 表示测试集中每个类别的真实样本数量。\n\n"
-    "========== 3. 混淆矩阵 ==========\n\n"
-    f"{cm_df.to_string()}\n\n"
-    "说明:\n"
-    "混淆矩阵的行表示真实类别，列表示预测类别。\n"
-    "对角线上的数字表示预测正确的数量，非对角线上的数字表示预测错误的数量。\n\n"
-    "========== 4. 特征重要性 ==========\n\n"
-    f"{feature_importance.to_string(index=False)}\n\n"
-    "说明:\n"
-    "Importance 越大，说明该特征对 AdaBoost 模型判断手机价格等级的影响越大。\n\n"
-    "========== 5. 前 10 个测试样本预测概率 ==========\n\n"
-    f"{prediction_sample_head.to_string(index=False)}\n\n"
-    "说明:\n"
-    "类别_0_概率、类别_1_概率、类别_2_概率、类别_3_概率表示模型认为该样本属于对应价格等级的概率。\n"
-)
-
-
-# 9. 终端输出
-print(output_text)
-
-
-# 10. 保存结果文件
-REPORT_PATH.write_text(output_text, encoding="utf-8")
-feature_importance.to_csv(FEATURE_IMPORTANCE_PATH, index=False, encoding="utf-8-sig")
-cm_df.to_csv(CONFUSION_MATRIX_PATH, encoding="utf-8-sig")
-prediction_sample_head.to_csv(PREDICT_PROBA_PATH, index=False, encoding="utf-8-sig")
+out("\n各类别 precision / recall / f1-score / support 已保存到 classification_report.csv。")
+out("重要特征排名前 10:")
+for _, row in importance_df.head(10).iterrows():
+    out(f"{row['feature']}: {row['importance']:.4f}")
