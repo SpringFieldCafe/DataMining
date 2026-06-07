@@ -1,0 +1,112 @@
+﻿Ensemble learning experiment for mobile price classification
+
+Dataset path: C:\Users\HuYiZhou\Desktop\data mining\assignment6\作业6-集成学习\data.csv
+Total samples: 2000
+Feature count: 20
+Label column: price_range
+Train-test split: test_size=0.25, random_state=42, stratify=y
+
+Model comparison table:
+           model  accuracy  precision  recall  f1_score
+        AdaBoost     0.922   0.924201   0.922  0.922639
+GradientBoosting     0.912   0.912493   0.912  0.912070
+         Bagging     0.884   0.884788   0.884  0.884306
+    RandomForest     0.880   0.880568   0.880  0.880270
+
+===== Bagging =====
+accuracy: 0.8840
+precision: 0.8848
+recall: 0.8840
+f1_score: 0.8843
+
+              precision    recall  f1-score   support
+
+           0       0.94      0.94      0.94       125
+           1       0.85      0.84      0.84       125
+           2       0.81      0.84      0.83       125
+           3       0.93      0.91      0.92       125
+
+    accuracy                           0.88       500
+   macro avg       0.88      0.88      0.88       500
+weighted avg       0.88      0.88      0.88       500
+
+
+===== RandomForest =====
+accuracy: 0.8800
+precision: 0.8806
+recall: 0.8800
+f1_score: 0.8803
+
+              precision    recall  f1-score   support
+
+           0       0.96      0.95      0.96       125
+           1       0.82      0.82      0.82       125
+           2       0.80      0.81      0.80       125
+           3       0.94      0.94      0.94       125
+
+    accuracy                           0.88       500
+   macro avg       0.88      0.88      0.88       500
+weighted avg       0.88      0.88      0.88       500
+
+
+===== AdaBoost =====
+accuracy: 0.9220
+precision: 0.9242
+recall: 0.9220
+f1_score: 0.9226
+
+              precision    recall  f1-score   support
+
+           0       0.99      0.94      0.96       125
+           1       0.91      0.92      0.91       125
+           2       0.86      0.91      0.88       125
+           3       0.94      0.92      0.93       125
+
+    accuracy                           0.92       500
+   macro avg       0.92      0.92      0.92       500
+weighted avg       0.92      0.92      0.92       500
+
+
+===== GradientBoosting =====
+accuracy: 0.9120
+precision: 0.9125
+recall: 0.9120
+f1_score: 0.9121
+
+              precision    recall  f1-score   support
+
+           0       0.95      0.98      0.96       125
+           1       0.87      0.86      0.87       125
+           2       0.86      0.87      0.87       125
+           3       0.97      0.94      0.96       125
+
+    accuracy                           0.91       500
+   macro avg       0.91      0.91      0.91       500
+weighted avg       0.91      0.91      0.91       500
+
+
+RandomForest feature importance:
+      Feature  Importance
+          ram    0.485239
+battery_power    0.073753
+     px_width    0.057340
+    px_height    0.054351
+    mobile_wt    0.039426
+   int_memory    0.036586
+    talk_time    0.030092
+           pc    0.028694
+         sc_w    0.028393
+         sc_h    0.028122
+  clock_speed    0.026985
+        m_dep    0.024812
+           fc    0.023840
+      n_cores    0.023657
+ touch_screen    0.006888
+       four_g    0.006882
+         blue    0.006566
+     dual_sim    0.006453
+         wifi    0.006315
+      three_g    0.005605
+
+Short analysis:
+The best model in this experiment is AdaBoost, with accuracy=0.9220 and weighted_f1=0.9226. Compared with a single boosting model, the model comparison is more suitable for the topic of ensemble learning because it shows bagging, random forest, AdaBoost and gradient boosting under the same train-test split. For this mobile price dataset, RAM is usually the most important feature, because price_range is strongly related to hardware capacity.
